@@ -1,7 +1,7 @@
 #define _GNU_SOURCE
 #include "config.h"
-#define CMD_STOP "stop recovery"
-#define CMD_START "start recovery"
+#define CMD_STOP "killall -STOP recovery"
+#define CMD_START "killall -CONT recovery"
 #include "display.h"
 #include "input.h"
 #include "term.h"
@@ -359,8 +359,11 @@ int main(int argc, char **argv) {
     uint64_t now =
         (uint64_t)loop_ts.tv_sec * 1000 + (uint64_t)loop_ts.tv_nsec / 1000000;
 
-    /*  Display Timeout Logic  */
-    if (!is_blanked &&
+    /*  Display Timeout Logic  *
+     * Frozen while an external client (X11/Wayland) owns the screen
+     * (g_vt_active == 0): input events are not read in that state, so
+     * last_phys_input would otherwise go stale and blank the panel.   */
+    if (g_vt_active && !is_blanked &&
         (now - last_phys_input > (uint64_t)DISPLAY_TIMEOUT * 1000)) {
       is_blanked = true;
       display_blank(&disp, true);
@@ -380,10 +383,16 @@ int main(int argc, char **argv) {
       }
     }
 
-    /*  Deferred VT release (SIGUSR1)  */
+    /*  Deferred VT release (SIGUSR1)  *
+     * Wake the panel first if it was blanked, then hand the screen over. */
     if (g_vt_rel) {
       g_vt_rel = 0;
+      if (is_blanked) {
+        is_blanked = false;
+        display_blank(&disp, false);
+      }
       vt_release(&disp);
+      last_phys_input = now;
     }
 
     /*  Deferred VT acquire (SIGUSR2)  *
@@ -392,7 +401,12 @@ int main(int argc, char **argv) {
     if (g_vt_acq) {
       g_vt_acq = 0;
       g_vt_lost = 0; /* re-acquired after a lost state resets it      */
+      if (is_blanked) {
+        is_blanked = false;
+        display_blank(&disp, false);
+      }
       vt_acquire(&disp);
+      last_phys_input = now; /* restart the timeout from now */
       input_flush(&in); /* discard keys buffered while VT was inactive   */
       for (int r = 0; r < term.rows; r++)
         term.dirty[r] = true;
