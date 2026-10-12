@@ -23,7 +23,7 @@
 #define CURSOR_COLOR 15
 
 /* Display format: 0=RGB, 1=BGR */
-#define COLOR_BGR 0
+#define COLOR_BGR 1
 
 /* Shadow buffer: render to malloc'd buffer, memcpy to scanout on kick.
  * Eliminates tearing on video-mode LCD panels. Costs ~10MB extra RAM.
@@ -58,7 +58,7 @@
 #define SOCKET_PATH "/tmp/rc.sock"
 
 #define BACKLIGHT_PATH                                                         \
-  "/sys/devices/platform/soc/soc:mtk_leds/leds/lcd-backlight/brightness"
+  "/sys/class/backlight/panel/brightness"
 #define BACKLIGHT_VAL 200
 
 #define LOG(fmt, ...)                                                          \
